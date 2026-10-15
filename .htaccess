@@ -1,0 +1,2 @@
+# If the repository root is ever served, serve nothing from it.
+Require all denied
