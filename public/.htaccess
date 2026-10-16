@@ -1,3 +1,7 @@
+# The repository root's .htaccess denies everything, and Apache inherits it
+# into this folder, so re-allow access here.
+Require all granted
+
 # Route everything to index.php and require HTTPS.
 RewriteEngine On
 RewriteCond %{HTTPS} off
