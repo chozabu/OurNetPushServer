@@ -1,3 +1,16 @@
 config.php
 data/
 tests/tmp/
+
+# Secrets and runtime state; never commit these.
+.env
+.env.*
+*service-account*.json
+*firebase-adminsdk*.json
+fcm-token.json
+*.pem
+*.key
+*.p12
+*.sqlite
+*.sqlite-*
+*.log
