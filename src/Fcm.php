@@ -35,21 +35,33 @@ final class Fcm
         }
     }
 
-    /** Wakes the device holding FCM [token]. */
-    public function wake(string $token): void
+    /**
+     * Wakes the device holding FCM [token]. [kind] is `wake` (sync),
+     * `call` (ring for incoming call [call]) or `cancel` (stop ringing for it).
+     */
+    public function wake(string $token, string $kind = 'wake', ?string $call = null): void
     {
+        $android = $kind === 'wake'
+            ? [
+                'priority' => 'HIGH',
+                // Wakes that pile up while the phone is offline arrive as one.
+                'collapse_key' => 'wake',
+                'ttl' => '600s',
+            ]
+            : [
+                'priority' => 'HIGH',
+                // A cancel replaces the call it ends if both are still queued.
+                'collapse_key' => 'call',
+                // A call that arrives late must not ring.
+                'ttl' => '30s',
+            ];
         $message = [
             'message' => [
                 'token' => $token,
                 // Data only, so OurNet's own service handles it and nothing
                 // is shown by the system.
-                'data' => ['ournet' => 'wake'],
-                'android' => [
-                    'priority' => 'HIGH',
-                    // Wakes that pile up while the phone is offline arrive as one.
-                    'collapse_key' => 'wake',
-                    'ttl' => '600s',
-                ],
+                'data' => ['ournet' => $kind] + ($call === null ? [] : ['call' => $call]),
+                'android' => $android,
             ],
         ];
         if ($this->mode === 'log') {

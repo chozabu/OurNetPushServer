@@ -32,7 +32,7 @@ Every call is `POST` with a JSON body, and answers JSON. Errors are
 | `/v1/register` | `{fcm}` | 201 `{device, secret}` |
 | `/v1/register` | `{fcm, device, secret}` | 200 `{device}`: updates the FCM token and marks the device as seen |
 | `/v1/grants` | `{device, secret, replace?, add?, remove?}` | 200 `{grants}`: the new count |
-| `/v1/wake` | `{device, token}` | 202; 403 not allowed; 429 too soon; 410 device gone |
+| `/v1/wake` | `{device, token, kind?, call?}` | 202; 403 not allowed; 429 too soon; 410 device gone |
 | `/v1/unregister` | `{device, secret}` | 200 |
 
 - `device` is 22 base64url characters and `secret` is 43, both issued by
@@ -46,6 +46,12 @@ Every call is `POST` with a JSON body, and answers JSON. Errors are
 - `wake` answers 403 the same way for an unknown device and for a wrong token.
   On 410 the phone uninstalled OurNet or replaced its FCM token, so the sender
   should forget the address.
+- `kind` is `wake` (the default: sync), `call` (ring for incoming call `call`,
+  an ID of up to 64 base64url characters) or `cancel` (stop ringing for it).
+  Calls and cancels skip the per-grant interval, so a call rings straight
+  after a message wake and its cancel follows at once; they still count
+  toward the hourly cap. They live 30 seconds in FCM and share a collapse
+  key, so a call still queued is replaced by its cancel.
 - `GET /` answers `{"service":"ournet-push","version":1}`.
 
 Limits (in `config.php`, `limits`): 5 s between wakes through one grant, 120

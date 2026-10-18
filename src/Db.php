@@ -137,10 +137,12 @@ final class Db
         return $q->fetch() ?: null;
     }
 
-    public function noteWake(string $device, string $tokenHash, int $now, int $windowStart, int $windowCount): void
+    public function noteWake(string $device, ?string $tokenHash, int $now, int $windowStart, int $windowCount): void
     {
-        $this->pdo->prepare('UPDATE grants SET last_wake = ? WHERE device = ? AND token_hash = ?')
-            ->execute([$now, $device, $tokenHash]);
+        if ($tokenHash !== null) {
+            $this->pdo->prepare('UPDATE grants SET last_wake = ? WHERE device = ? AND token_hash = ?')
+                ->execute([$now, $device, $tokenHash]);
+        }
         $this->pdo->prepare('UPDATE devices SET window_start = ?, window_count = ? WHERE id = ?')
             ->execute([$windowStart, $windowCount, $device]);
     }

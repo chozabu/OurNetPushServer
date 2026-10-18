@@ -74,6 +74,21 @@ check('per-device hourly cap', $s === 429 && $sent() === 3);
 [$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2]], now: $t + 3601);
 check('cap resets after an hour', $s === 202);
 
+// Calls skip the per-grant interval, expire quickly, and share a collapse key with their cancel.
+[$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2], 'kind' => 'call', 'call' => 'c1'], now: $t + 3602);
+$msg = json_decode(file("$tmp/token.json.log")[$sent() - 1], true)['message'];
+check('call rings straight after a wake', $s === 202
+    && $msg['data'] === ['ournet' => 'call', 'call' => 'c1'] && $msg['android']['ttl'] === '30s' && $msg['android']['collapse_key'] === 'call', $msg);
+[$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2], 'kind' => 'cancel', 'call' => 'c1'], now: $t + 3602);
+$msg = json_decode(file("$tmp/token.json.log")[$sent() - 1], true)['message'];
+check('cancel follows at once', $s === 202 && $msg['data'] === ['ournet' => 'cancel', 'call' => 'c1'], $msg);
+[$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2], 'kind' => 'call'], now: $t + 3603);
+check('call needs an ID', $s === 400);
+[$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2], 'kind' => 'ring', 'call' => 'c1'], now: $t + 3603);
+check('unknown kind refused', $s === 400);
+[$s, $b] = $call('/v1/wake', ['device' => $device, 'token' => $friends[2], 'kind' => 'call', 'call' => 'c2'], now: $t + 3603);
+check('calls count toward the hourly cap', $s === 429, $b);
+
 [$s, $b] = $call('/v1/grants', ['device' => $device, 'secret' => $secret, 'remove' => [$sha($friends[1])]]);
 check('revoke one friend', $s === 200 && $b['grants'] === 2, $b);
 [$s] = $call('/v1/wake', ['device' => $device, 'token' => $friends[1]], now: $t + 4000);

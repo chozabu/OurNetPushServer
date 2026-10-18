@@ -27,6 +27,7 @@ final class Server
     private const SECRET = '/^[A-Za-z0-9_-]{43}$/';
     private const TOKEN = '/^[A-Za-z0-9_-]{16,128}$/';
     private const HASH = '/^[0-9a-f]{64}$/';
+    private const CALL = '/^[A-Za-z0-9_-]{1,64}$/';
 
     /** @var array<string, int> */
     private array $limits;
@@ -140,12 +141,20 @@ final class Server
         if (!is_string($id) || !preg_match(self::ID, $id) || !is_string($token) || !preg_match(self::TOKEN, $token)) {
             throw new HttpError(400, 'device and token');
         }
+        $kind = $j['kind'] ?? 'wake';
+        $call = $j['call'] ?? null;
+        if (!in_array($kind, ['wake', 'call', 'cancel'], true)) throw new HttpError(400, 'kind: wake, call or cancel');
+        if ($kind === 'wake' ? $call !== null : (!is_string($call) || !preg_match(self::CALL, $call))) {
+            throw new HttpError(400, 'call: the call\'s ID, with kind call or cancel');
+        }
         $device = $this->db->device($id);
         $hash = hash('sha256', $token);
         $grant = $device ? $this->db->grant($id, $hash) : null;
         // The same answer for an unknown device and a wrong token.
         if ($grant === null) throw new HttpError(403, 'Not allowed to wake this device');
-        $wait = $grant['last_wake'] + $this->limits['grant_interval'] - $now;
+        // A call must ring, and its cancel follow, whatever was just sent;
+        // the hourly cap still holds.
+        $wait = $kind === 'wake' ? $grant['last_wake'] + $this->limits['grant_interval'] - $now : 0;
         if ($wait > 0) throw new HttpError(429, 'Too soon', ['retry' => $wait]);
         $start = (int)$device['window_start'];
         $count = (int)$device['window_count'];
@@ -157,7 +166,7 @@ final class Server
             throw new HttpError(429, 'Device is being woken too often', ['retry' => $start + 3600 - $now]);
         }
         try {
-            $this->fcm->wake($device['fcm']);
+            $this->fcm->wake($device['fcm'], $kind, $call);
         } catch (TokenGone) {
             // The app was uninstalled or its token replaced without telling us.
             $this->db->removeDevice($id);
@@ -165,7 +174,7 @@ final class Server
         } catch (\RuntimeException $e) {
             throw new HttpError(502, $e->getMessage());
         }
-        $this->db->noteWake($id, $hash, $now, $start, $count + 1);
+        $this->db->noteWake($id, $kind === 'wake' ? $hash : null, $now, $start, $count + 1);
         return [202, []];
     }
 
